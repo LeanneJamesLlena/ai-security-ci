@@ -1,0 +1,53 @@
+name: Security Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+jobs:
+  semgrep:
+    name: Semgrep Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Install Semgrep
+        run: pip install semgrep
+      
+      - name: Run Semgrep scan
+        run: |
+          semgrep scan \
+            --config auto \
+            --json \
+            --output semgrep-results.json \
+            src/vulnerable_tasks/
+        continue-on-error: true
+      
+      - name: Display results summary
+        if: always()
+        run: |
+          if [ -f semgrep-results.json ]; then
+            echo "📊 Semgrep Scan Complete"
+            echo "Total findings: $(jq '.results | length' semgrep-results.json)"
+            echo ""
+            echo "Findings by severity:"
+            jq -r '.results | group_by(.extra.severity) | .[] | "\(.[0].extra.severity): \(length)"' semgrep-results.json
+          fi
+      
+      - name: Upload Semgrep results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-results
+          path: semgrep-results.json
+          retention-days: 30
