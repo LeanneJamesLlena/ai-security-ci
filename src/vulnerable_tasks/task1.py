@@ -10,7 +10,7 @@ def get_user(username: str):
     conn = sqlite3.connect('users.db')
     cursor = conn.cursor()
     
-    # VULNERABLE: String formatting in SQL query
+    # VULNERABLE: String formatting in SQL queryr
     query = f"SELECT * FROM users WHERE username = '{username}'"
     cursor.execute(query)
     
