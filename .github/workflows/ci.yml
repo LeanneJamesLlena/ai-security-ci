@@ -52,51 +52,51 @@ jobs:
           set -euo pipefail
           
           if [ ! -f semgrep-results.json ]; then
-            cat > comment.md << 'EOF'
-## Semgrep Security Scan Results
-
-**Scan failed or no results file generated.**
-
-Please check the workflow logs for details.
-
-<!-- AI-SECURITY-FINDINGS -->
-EOF
+            {
+              echo "## Semgrep Security Scan Results"
+              echo ""
+              echo "**Scan failed or no results file generated.**"
+              echo ""
+              echo "Please check the workflow logs for details."
+              echo ""
+              echo "<!-- AI-SECURITY-FINDINGS -->"
+            } > comment.md
             exit 0
           fi
           
           TOTAL=$(jq '.results | length' semgrep-results.json)
           
           if [ "$TOTAL" -eq 0 ]; then
-            cat > comment.md << 'EOF'
-## Semgrep Security Scan Results
-
-**Total findings**: 0
-
-No security issues found.
-
-Full JSON results are available in the workflow artifacts.
-
-<!-- AI-SECURITY-FINDINGS -->
-EOF
+            {
+              echo "## Semgrep Security Scan Results"
+              echo ""
+              echo "**Total findings**: 0"
+              echo ""
+              echo "No security issues found."
+              echo ""
+              echo "Full JSON results are available in the workflow artifacts."
+              echo ""
+              echo "<!-- AI-SECURITY-FINDINGS -->"
+            } > comment.md
           else
             SEVERITY_BREAKDOWN=$(jq -r '.results | group_by(.extra.severity) | .[] | "- **\(.[0].extra.severity)**: \(length)"' semgrep-results.json || echo "- No severity data available")
             TOP_FINDINGS=$(jq -r '.results[0:10] | .[] | "- **\(.check_id)** - `\(.path)`:\(.start.line)` - Severity: \(.extra.severity // "unknown")"' semgrep-results.json)
             
-            cat > comment.md << EOF
-## Semgrep Security Scan Results
-
-**Total findings**: $TOTAL
-
-### Breakdown by Severity
-$SEVERITY_BREAKDOWN
-
-### First 10 Findings
-$TOP_FINDINGS
-
-> Full JSON results are available in the workflow artifacts.
-
-<!-- AI-SECURITY-FINDINGS -->
-EOF
+            {
+              echo "## Semgrep Security Scan Results"
+              echo ""
+              echo "**Total findings**: $TOTAL"
+              echo ""
+              echo "### Breakdown by Severity"
+              echo "$SEVERITY_BREAKDOWN"
+              echo ""
+              echo "### First 10 Findings"
+              echo "$TOP_FINDINGS"
+              echo ""
+              echo "> Full JSON results are available in the workflow artifacts."
+              echo ""
+              echo "<!-- AI-SECURITY-FINDINGS -->"
+            } > comment.md
           fi
       
       - name: Post PR comment
