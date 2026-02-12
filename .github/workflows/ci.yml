@@ -7,6 +7,11 @@ on:
     branches: [main, develop]
   workflow_dispatch:
 
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
 jobs:
   semgrep:
     name: Semgrep Security Scan
@@ -25,24 +30,89 @@ jobs:
         run: pip install semgrep
       
       - name: Run Semgrep scan
-        run: |
-          semgrep scan \
-            --config auto \
-            --json \
-            --output semgrep-results.json \
-            src/vulnerable_tasks/
+        run: semgrep scan --config auto --json --output semgrep-results.json src/vulnerable_tasks/
         continue-on-error: true
       
       - name: Display results summary
         if: always()
         run: |
-          if [ -f semgrep-results.json ]; then
-            echo "📊 Semgrep Scan Complete"
-            echo "Total findings: $(jq '.results | length' semgrep-results.json)"
-            echo ""
-            echo "Findings by severity:"
-            jq -r '.results | group_by(.extra.severity) | .[] | "\(.[0].extra.severity): \(length)"' semgrep-results.json
+          set -euo pipefail
+          [ -f semgrep-results.json ] || exit 0
+          
+          TOTAL=$(jq '.results | length' semgrep-results.json)
+          echo "📊 Semgrep Scan Complete"
+          echo "Total findings: $TOTAL"
+          echo ""
+          echo "Findings by severity:"
+          jq -r '.results | group_by(.extra.severity) | .[] | "\(.[0].extra.severity): \(length)"' semgrep-results.json
+      
+      - name: Generate comment
+        if: always() && github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          
+          if [ ! -f semgrep-results.json ]; then
+            cat > comment.md << 'EOF'
+## Semgrep Security Scan Results
+
+**Scan failed or no results file generated.**
+
+Please check the workflow logs for details.
+
+<!-- AI-SECURITY-FINDINGS -->
+EOF
+            exit 0
           fi
+          
+          TOTAL=$(jq '.results | length' semgrep-results.json)
+          
+          if [ "$TOTAL" -eq 0 ]; then
+            cat > comment.md << 'EOF'
+## Semgrep Security Scan Results
+
+**Total findings**: 0
+
+No security issues found.
+
+Full JSON results are available in the workflow artifacts.
+
+<!-- AI-SECURITY-FINDINGS -->
+EOF
+          else
+            SEVERITY_BREAKDOWN=$(jq -r '.results | group_by(.extra.severity) | .[] | "- **\(.[0].extra.severity)**: \(length)"' semgrep-results.json || echo "- No severity data available")
+            TOP_FINDINGS=$(jq -r '.results[0:10] | .[] | "- **\(.check_id)** - `\(.path)`:\(.start.line)` - Severity: \(.extra.severity // "unknown")"' semgrep-results.json)
+            
+            cat > comment.md << EOF
+## Semgrep Security Scan Results
+
+**Total findings**: $TOTAL
+
+### Breakdown by Severity
+$SEVERITY_BREAKDOWN
+
+### First 10 Findings
+$TOP_FINDINGS
+
+> Full JSON results are available in the workflow artifacts.
+
+<!-- AI-SECURITY-FINDINGS -->
+EOF
+          fi
+      
+      - name: Post PR comment
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const commentBody = fs.readFileSync('comment.md', 'utf8');
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body: commentBody
+            });
       
       - name: Upload Semgrep results
         if: always()
