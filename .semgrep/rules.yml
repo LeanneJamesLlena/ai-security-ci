@@ -1,0 +1,64 @@
+rules:
+  - id: sql-injection
+    pattern: |
+      cursor.execute($QUERY)
+    where:
+      - metavariable-regex:
+          metavariable: $QUERY
+          regex: (\+|f"|f'|%|format\()
+    message: SQL injection vulnerability detected. Dynamic query construction with string concatenation or f-strings in cursor.execute() can lead to SQL injection attacks.
+    severity: ERROR
+    languages:
+      - python
+
+  - id: command-injection
+    patterns:
+      - pattern-either:
+          - pattern: subprocess.call($CMD, shell=True, ...)
+          - pattern: subprocess.run($CMD, shell=True, ...)
+          - pattern: os.system($CMD)
+    where:
+      - any:
+          - metavariable-regex:
+              metavariable: $CMD
+              regex: (\+|f"|f'|%|format\(|input\(|sys\.argv)
+    message: Command injection vulnerability detected. Use of shell=True with dynamic input or os.system() with user-controlled data can lead to command injection attacks.
+    severity: ERROR
+    languages:
+      - python
+
+  - id: hardcoded-secrets
+    pattern-either:
+      - pattern: |
+          $VAR = $VALUE
+        where:
+          - metavariable-regex:
+              metavariable: $VAR
+              regex: (?i)(PASSWORD|API_KEY|SECRET|TOKEN|CREDENTIAL)
+          - metavariable-regex:
+              metavariable: $VALUE
+              regex: ^["'].+["']$
+    message: Hardcoded secret detected. Storing passwords, API keys, or secrets as string literals in code is a security risk. Use environment variables or secure secret management.
+    severity: WARNING
+    languages:
+      - python
+
+  - id: path-traversal
+    pattern: |
+      open($PATH, ...)
+    where:
+      - metavariable-regex:
+          metavariable: $PATH
+          regex: (\+|f"|f'|%|format\(|input\(|sys\.argv)
+    message: Path traversal vulnerability detected. File operations with concatenated or user-controlled paths can lead to directory traversal attacks.
+    severity: ERROR
+    languages:
+      - python
+
+  - id: insecure-deserialization
+    pattern: |
+      pickle.loads($DATA)
+    message: Insecure deserialization detected. pickle.loads() can execute arbitrary code during deserialization. Use safer serialization formats like JSON or implement proper validation.
+    severity: ERROR
+    languages:
+      - python

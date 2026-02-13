@@ -10,7 +10,6 @@ env/
 
 # Semgrep
 semgrep-results.json
-.semgrep/
 
 # IDEs
 .vscode/
