@@ -1,5 +1,5 @@
 """
-Test task with 3 common vulnerabilities
+Test task with 32 common vulnerabilities
 Use this to verify the Semgrep pipeline works correctly
 """
 
