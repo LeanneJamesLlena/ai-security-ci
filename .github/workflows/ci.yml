@@ -26,12 +26,31 @@ jobs:
         with:
           python-version: '3.12'
       
-      - name: Install Semgrep
-        run: pip install semgrep
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+          pip install "semgrep==1.95.0"
       
       - name: Run Semgrep scan
-        run: semgrep scan --config auto --json --output semgrep-results.json src/vulnerable_tasks/
+        run: semgrep scan --config .semgrep/rules.yml --json --output semgrep-results.json src/vulnerable_tasks/
         continue-on-error: true
+      
+      - name: Validate scan results
+        if: always()
+        run: |
+          set -euo pipefail
+          [ -f semgrep-results.json ] || exit 0
+          
+          FINDINGS=$(jq '.results | length' semgrep-results.json)
+          
+          if [ "$FINDINGS" -eq 0 ]; then
+            echo "⚠️ Warning: No findings detected. Rules may be misconfigured."
+          elif [ "$FINDINGS" -gt 15 ]; then
+            echo "⚠️ Warning: $FINDINGS findings detected. Rules may be too noisy."
+          else
+            echo "✓ Validation passed: $FINDINGS findings detected (expected 5-8)."
+          fi
       
       - name: Display results summary
         if: always()
@@ -52,51 +71,65 @@ jobs:
           set -euo pipefail
           
           if [ ! -f semgrep-results.json ]; then
-            cat > comment.md << 'EOF'
-## Semgrep Security Scan Results
-
-**Scan failed or no results file generated.**
-
-Please check the workflow logs for details.
-
-<!-- AI-SECURITY-FINDINGS -->
-EOF
+            {
+              echo "## 🔒 Semgrep Security Scan Results"
+              echo ""
+              echo "**Scan failed or no results file generated.**"
+              echo ""
+              echo "Please check the workflow logs for details."
+              echo ""
+              echo "<!-- AI-SECURITY-FINDINGS -->"
+            } > comment.md
             exit 0
           fi
           
           TOTAL=$(jq '.results | length' semgrep-results.json)
           
           if [ "$TOTAL" -eq 0 ]; then
-            cat > comment.md << 'EOF'
-## Semgrep Security Scan Results
-
-**Total findings**: 0
-
-No security issues found.
-
-Full JSON results are available in the workflow artifacts.
-
-<!-- AI-SECURITY-FINDINGS -->
-EOF
+            {
+              echo "## 🔒 Semgrep Security Scan Results"
+              echo ""
+              echo "**Total findings**: 0"
+              echo ""
+              echo "No security issues found."
+              echo ""
+              echo "📦 Full results available as workflow artifact: \`semgrep-results.json\`"
+              echo ""
+              echo "<!-- AI-SECURITY-FINDINGS -->"
+            } > comment.md
           else
-            SEVERITY_BREAKDOWN=$(jq -r '.results | group_by(.extra.severity) | .[] | "- **\(.[0].extra.severity)**: \(length)"' semgrep-results.json || echo "- No severity data available")
-            TOP_FINDINGS=$(jq -r '.results[0:10] | .[] | "- **\(.check_id)** - `\(.path)`:\(.start.line)` - Severity: \(.extra.severity // "unknown")"' semgrep-results.json)
+            ERROR_COUNT=$(jq '[.results[] | select(.extra.severity == "ERROR")] | length' semgrep-results.json)
+            WARNING_COUNT=$(jq '[.results[] | select(.extra.severity == "WARNING")] | length' semgrep-results.json)
+            INFO_COUNT=$(jq '[.results[] | select(.extra.severity == "INFO")] | length' semgrep-results.json)
             
-            cat > comment.md << EOF
-## Semgrep Security Scan Results
-
-**Total findings**: $TOTAL
-
-### Breakdown by Severity
-$SEVERITY_BREAKDOWN
-
-### First 10 Findings
-$TOP_FINDINGS
-
-> Full JSON results are available in the workflow artifacts.
-
-<!-- AI-SECURITY-FINDINGS -->
-EOF
+            SEVERITY_BREAKDOWN=""
+            [ "$ERROR_COUNT" -gt 0 ] && SEVERITY_BREAKDOWN="${SEVERITY_BREAKDOWN}- **ERROR**: $ERROR_COUNT"$'\n'
+            [ "$WARNING_COUNT" -gt 0 ] && SEVERITY_BREAKDOWN="${SEVERITY_BREAKDOWN}- **WARNING**: $WARNING_COUNT"$'\n'
+            [ "$INFO_COUNT" -gt 0 ] && SEVERITY_BREAKDOWN="${SEVERITY_BREAKDOWN}- **INFO**: $INFO_COUNT"$'\n'
+            [ -z "$SEVERITY_BREAKDOWN" ] && SEVERITY_BREAKDOWN="- No severity data available"$'\n'
+            
+            jq -r '.results | 
+              map(. + {severity_order: (if .extra.severity == "ERROR" then 0 elif .extra.severity == "WARNING" then 1 elif .extra.severity == "INFO" then 2 else 3 end)}) | 
+              sort_by(.severity_order, .path, .start.line) | 
+              .[0:10] | 
+              .[] | 
+              "**\(.check_id)** — `\(.path):\(.start.line)` — \(.extra.message) _(Severity: \(.extra.severity // "unknown"))_"' \
+              semgrep-results.json > findings_list.txt
+            
+            {
+              echo "## 🔒 Semgrep Security Scan Results"
+              echo ""
+              echo "**Total findings**: $TOTAL"
+              echo ""
+              echo "### Breakdown by Severity"
+              echo -n "$SEVERITY_BREAKDOWN"
+              echo "### Findings"
+              cat findings_list.txt
+              echo ""
+              echo "📦 Full results available as workflow artifact: \`semgrep-results.json\`"
+              echo ""
+              echo "<!-- AI-SECURITY-FINDINGS -->"
+            } > comment.md
           fi
       
       - name: Post PR comment
