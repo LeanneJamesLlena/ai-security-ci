@@ -1,11 +1,18 @@
 rules:
   - id: sql-injection
-    pattern: |
-      cursor.execute($QUERY)
-    where:
-      - metavariable-regex:
-          metavariable: $QUERY
-          regex: (\+|f"|f'|%|format\()
+    patterns:
+      - pattern-inside: |
+          $QUERY = ... + $VAR + ...
+          ...
+          cursor.execute($QUERY)
+      - pattern: |
+          cursor.execute($QUERY)
+        where:
+          - metavariable-regex:
+              metavariable: $QUERY
+              regex: (\+|f"|f'|%|format\()
+      - pattern: |
+          cursor.execute("..." + $VAR + "...")
     message: SQL injection vulnerability detected. Dynamic query construction with string concatenation or f-strings in cursor.execute() can lead to SQL injection attacks.
     severity: ERROR
     languages:
