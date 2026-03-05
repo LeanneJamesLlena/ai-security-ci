@@ -15,7 +15,7 @@ def search_user(username):
     cursor.execute(query)
     return cursor.fetchall()
 
-# VULNERABILITY 2: Command Injection
+# VULNERABILITY 2: Command Injectionn
 def backup_database(backup_name):
     """Create a database backup"""
     subprocess.call("cp database.db backups/" + backup_name, shell=True)
