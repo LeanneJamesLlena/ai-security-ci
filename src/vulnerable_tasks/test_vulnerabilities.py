@@ -105,7 +105,7 @@ def main():
     serialized_data = pickle.dumps({"test": "data"})
     insecure_deserialization(serialized_data)
 
-    # Test insecure SSL verification
+    # Test insecure SSL verification new code
     insecure_ssl_vulnerable("https://example.com")
 
 
