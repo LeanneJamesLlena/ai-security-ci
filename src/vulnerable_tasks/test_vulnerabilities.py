@@ -13,7 +13,7 @@ import sys
 def sql_injection_vulnerable(user_input):
     """Vulnerable SQL query construction - triggers SQL injection rule."""
     import sqlite3
-    conn = sqlite3.connect('test.db')
+    conn = sqlite3.connect('test.db') # .
     cursor = conn.cursor()
     
     # This will trigger the SQL injection rule
