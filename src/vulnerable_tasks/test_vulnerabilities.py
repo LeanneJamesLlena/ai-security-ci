@@ -8,6 +8,7 @@ import subprocess
 import os
 import pickle
 import sys
+import requests
 
 
 def sql_injection_vulnerable(user_input):
@@ -17,12 +18,13 @@ def sql_injection_vulnerable(user_input):
     cursor = conn.cursor()
     
     # This will trigger the SQL injection rulee
-    query = f"SELECT * FROM users WHERE username = '{user_input}'"
-    cursor.execute(query)
-    
-    # Another vulnerable pattern
-    query2 = "SELECT * FROM users WHERE id = " + user_input
-    cursor.execute(query2)
+    cursor.execute(f"SELECT * FROM users WHERE username = '{user_input}'")
+
+    # Another vulnerable pattern (string concatenation)
+    cursor.execute("SELECT * FROM users WHERE id = " + user_input)
+
+    # Another vulnerable pattern (format())
+    cursor.execute("SELECT * FROM users WHERE role = '{}'".format(user_input))
     
     return cursor.fetchall()
 
@@ -57,19 +59,22 @@ def hardcoded_secrets():
 def path_traversal_vulnerable(user_input):
     """Vulnerable file operations - triggers path traversal rule."""
     # This will trigger the path traversal rule
-    file_path = "/data/" + user_input
-    with open(file_path, 'r') as f:
+    with open("/data/" + user_input, 'r') as f:
         return f.read()
     
     # Another vulnerable pattern
-    file_path2 = f"/tmp/{user_input}"
-    with open(file_path2, 'w') as f:
+    with open(f"/tmp/{user_input}", 'w') as f:
         f.write("test")
     
     # Using format()
-    file_path3 = "/uploads/{}".format(user_input)
-    with open(file_path3, 'r') as f:
+    with open("/uploads/{}".format(user_input), 'r') as f:
         return f.read()
+
+
+def insecure_ssl_vulnerable(url):
+    """Insecure SSL verification - triggers insecure-ssl-verification rule."""
+    # This will trigger the insecure ssl verification rule
+    requests.get(url, verify=False)
 
 
 def insecure_deserialization(data):
@@ -99,6 +104,9 @@ def main():
     # Test insecure deserialization
     serialized_data = pickle.dumps({"test": "data"})
     insecure_deserialization(serialized_data)
+
+    # Test insecure SSL verification
+    insecure_ssl_vulnerable("https://example.com")
 
 
 if __name__ == "__main__":
