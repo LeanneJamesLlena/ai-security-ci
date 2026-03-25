@@ -28,17 +28,20 @@ jobs:
       
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip setuptools wheel
-          python -c "import pkg_resources; print('pkg_resources OK')"
+          python -m pip install --upgrade pip wheel
           sudo apt-get update
           sudo apt-get install -y jq
+          # Semgrep (via opentelemetry) requires `pkg_resources`, which is provided by older setuptools.
+          # Newer setuptools versions removed/changed `pkg_resources` and break semgrep startup.
+          python -m pip install "setuptools==65.5.0"
           python -m pip install "semgrep==1.95.0"
+          python -m pip install --force-reinstall "setuptools==65.5.0"
       
       - name: Run Semgrep scan
         run: |
           echo "Running Semgrep scan on src/vulnerable_tasks/"
           ls -la src/vulnerable_tasks/ || echo "Directory listing failed"
-          python -m semgrep scan --config .semgrep/rules.yml --json --output semgrep-results.json src/vulnerable_tasks/
+          semgrep scan --config .semgrep/rules.yml --json --output semgrep-results.json src/vulnerable_tasks/
         continue-on-error: true
       
       - name: Check scan output
