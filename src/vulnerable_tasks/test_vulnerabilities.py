@@ -16,7 +16,7 @@ def sql_injection_vulnerable(user_input):
     conn = sqlite3.connect('test.db') # .
     cursor = conn.cursor()
     
-    # This will trigger the SQL injection rule
+    # This will trigger the SQL injection rulee
     query = f"SELECT * FROM users WHERE username = '{user_input}'"
     cursor.execute(query)
     

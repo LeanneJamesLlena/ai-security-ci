@@ -33,8 +33,23 @@ jobs:
           pip install "semgrep==1.95.0"
       
       - name: Run Semgrep scan
-        run: semgrep scan --config .semgrep/rules.yml --json --output semgrep-results.json src/vulnerable_tasks/
+        run: |
+          echo "Running Semgrep scan on src/vulnerable_tasks/"
+          ls -la src/vulnerable_tasks/ || echo "Directory listing failed"
+          semgrep scan --config .semgrep/rules.yml --json --output semgrep-results.json src/vulnerable_tasks/
         continue-on-error: true
+      
+      - name: Check scan output
+        if: always()
+        run: |
+          if [ -f semgrep-results.json ]; then
+            echo "✓ semgrep-results.json exists"
+            echo "File size: $(wc -c < semgrep-results.json) bytes"
+            echo "First 500 chars of results:"
+            head -c 500 semgrep-results.json || cat semgrep-results.json | head -c 500
+          else
+            echo "✗ semgrep-results.json not found"
+          fi
       
       - name: Validate scan results
         if: always()
@@ -68,7 +83,7 @@ jobs:
       - name: Generate comment
         if: always() && github.event_name == 'pull_request'
         run: |
-          set -euo pipefail
+          set +e  # Don't exit on error, we want to always generate a comment
           
           if [ ! -f semgrep-results.json ]; then
             {
@@ -83,9 +98,9 @@ jobs:
             exit 0
           fi
           
-          TOTAL=$(jq '.results | length' semgrep-results.json)
+          TOTAL=$(jq -r '.results | length // 0' semgrep-results.json 2>/dev/null || echo "0")
           
-          if [ "$TOTAL" -eq 0 ]; then
+          if [ -z "$TOTAL" ] || [ "$TOTAL" = "null" ] || [ "$TOTAL" -eq 0 ]; then
             {
               echo "## 🔒 Semgrep Security Scan Results"
               echo ""
@@ -98,9 +113,9 @@ jobs:
               echo "<!-- AI-SECURITY-FINDINGS -->"
             } > comment.md
           else
-            ERROR_COUNT=$(jq '[.results[] | select(.extra.severity == "ERROR")] | length' semgrep-results.json)
-            WARNING_COUNT=$(jq '[.results[] | select(.extra.severity == "WARNING")] | length' semgrep-results.json)
-            INFO_COUNT=$(jq '[.results[] | select(.extra.severity == "INFO")] | length' semgrep-results.json)
+            ERROR_COUNT=$(jq -r '[.results[] | select(.extra.severity == "ERROR")] | length // 0' semgrep-results.json 2>/dev/null || echo "0")
+            WARNING_COUNT=$(jq -r '[.results[] | select(.extra.severity == "WARNING")] | length // 0' semgrep-results.json 2>/dev/null || echo "0")
+            INFO_COUNT=$(jq -r '[.results[] | select(.extra.severity == "INFO")] | length // 0' semgrep-results.json 2>/dev/null || echo "0")
             
             SEVERITY_BREAKDOWN=""
             [ "$ERROR_COUNT" -gt 0 ] && SEVERITY_BREAKDOWN="${SEVERITY_BREAKDOWN}- **ERROR**: $ERROR_COUNT"$'\n'
@@ -114,7 +129,7 @@ jobs:
               .[0:10] | 
               .[] | 
               "**\(.check_id)** — `\(.path):\(.start.line)` — \(.extra.message) _(Severity: \(.extra.severity // "unknown"))_"' \
-              semgrep-results.json > findings_list.txt
+              semgrep-results.json > findings_list.txt 2>/dev/null || echo "Error generating findings list" > findings_list.txt
             
             {
               echo "## 🔒 Semgrep Security Scan Results"
@@ -138,14 +153,48 @@ jobs:
         with:
           script: |
             const fs = require('fs');
-            const commentBody = fs.readFileSync('comment.md', 'utf8');
+            const path = require('path');
             
-            await github.rest.issues.createComment({
+            // Check if comment.md exists
+            if (!fs.existsSync('comment.md')) {
+              console.log('comment.md not found, skipping comment posting');
+              return;
+            }
+            
+            const commentBody = fs.readFileSync('comment.md', 'utf8');
+            const marker = '<!-- AI-SECURITY-FINDINGS -->';
+            
+            // Find existing comments with the marker
+            const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.payload.pull_request.number,
-              body: commentBody
             });
+            
+            const existingComment = comments.find(comment => 
+              comment.body.includes(marker) && 
+              comment.user.type === 'Bot'
+            );
+            
+            if (existingComment) {
+              // Update existing comment
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existingComment.id,
+                body: commentBody
+              });
+              console.log('Updated existing PR comment');
+            } else {
+              // Create new comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                body: commentBody
+              });
+              console.log('Created new PR comment');
+            }
       
       - name: Upload Semgrep results
         if: always()
