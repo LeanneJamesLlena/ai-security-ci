@@ -29,6 +29,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip wheel
+          python -m pip install google-genai
           sudo apt-get update
           sudo apt-get install -y jq
           # Semgrep (via opentelemetry) requires `pkg_resources`, which is provided by older setuptools.
@@ -98,6 +99,14 @@ jobs:
           echo ""
           echo "Findings by severity:"
           jq -r '.results | group_by(.extra.severity) | .[] | "\(.[0].extra.severity): \(length)"' semgrep-results.json
+        
+      - name: Generate LLM explanations
+        if: always() && hashFiles('semgrep-results.json') != ''
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          python scripts/generate_explanations.py
+
       
       - name: Generate comment
         if: always() && github.event_name == 'pull_request'
@@ -127,7 +136,7 @@ jobs:
               echo ""
               echo "No security issues found."
               echo ""
-              echo "📦 Full results available as workflow artifact: \`semgrep-results.json\`"
+              echo "📦 Full results available as workflow artifacts: \`semgrep-results.json\`, \`llm-explanations.json\`"
               echo ""
               echo "<!-- AI-SECURITY-FINDINGS -->"
             } > comment.md
@@ -220,5 +229,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: semgrep-results
-          path: semgrep-results.json
+          path: |
+            semgrep-results.json
+            llm-explanations.json
           retention-days: 30
