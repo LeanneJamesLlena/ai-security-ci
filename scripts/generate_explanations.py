@@ -89,7 +89,7 @@ def safe_get_finding_fields(finding: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def build_prompt(fields: Dict[str, Any]) -> str:
-    return f"""You are a security assistant helping a developer understand a static analysis finding. Explain the following Semgrep security finding in plain language for a developer who may not be familiar with this vulnerability type.
+    return f"""Explain this Semgrep finding in exactly 4 sentences. Sentence 1: what the finding means. Sentence 2: what the security risk is. Sentence 3: what part of the code is problematic. Sentence 4: what kind of fix is appropriate. No code examples. No headers. No bullet points. Plain prose only.
 
 Rule: {fields['check_id']}
 Severity: {fields['severity']}
