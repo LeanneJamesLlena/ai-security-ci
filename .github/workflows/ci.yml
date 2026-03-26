@@ -47,36 +47,44 @@ jobs:
             --config p/python \
             --config p/secrets \
             --config p/owasp-top-ten \
-            --json --output semgrep-results.json \
+            --config r/python.lang.security.audit \
+            --config .semgrep/rules.yml \
+            --json --output semgrep-results-raw.json \
             src/vulnerable_tasks/
         continue-on-error: true
       
       - name: Check scan output
         if: always()
         run: |
-          if [ -f semgrep-results.json ]; then
-            echo "✓ semgrep-results.json exists"
-            echo "File size: $(wc -c < semgrep-results.json) bytes"
+          if [ -f semgrep-results-raw.json ]; then
+            echo "✓ semgrep-results-raw.json exists"
+            echo "File size: $(wc -c < semgrep-results-raw.json) bytes"
             echo "First 500 chars of results:"
-            head -c 500 semgrep-results.json || cat semgrep-results.json | head -c 500
+            head -c 500 semgrep-results-raw.json || cat semgrep-results-raw.json | head -c 500
           else
-            echo "✗ semgrep-results.json not found"
+            echo "✗ semgrep-results-raw.json not found"
           fi
-      
-      - name: Validate scan results
+
+      - name: Select exactly 6 findings (one per category)
         if: always()
         run: |
           set -euo pipefail
-          [ -f semgrep-results.json ] || exit 0
-          
+          [ -f semgrep-results-raw.json ] || exit 1
+          python3 scripts/select_semgrep_findings.py semgrep-results-raw.json semgrep-results.json
+          echo "Selected findings written to semgrep-results.json"
+          jq '.results | length' semgrep-results.json
+
+      - name: Validate selected scan results
+        if: always()
+        run: |
+          set -euo pipefail
+          [ -f semgrep-results.json ] || exit 1
           FINDINGS=$(jq '.results | length' semgrep-results.json)
-          
-          if [ "$FINDINGS" -eq 0 ]; then
-            echo "⚠️ Warning: No findings detected. Rules may be misconfigured."
-          else
-            # Registry packs can legitimately produce more findings than the prototype rules.
-            echo "✓ Validation passed: $FINDINGS findings detected."
+          if [ "$FINDINGS" -ne 6 ]; then
+            echo "✗ Expected exactly 6 findings after selection, got: $FINDINGS"
+            exit 1
           fi
+          echo "✓ Validation passed: $FINDINGS findings detected."
       
       - name: Display results summary
         if: always()

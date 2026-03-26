@@ -1,50 +1,30 @@
 rules:
-  - id: sql-injection
-    message: SQL injection vulnerability detected. Dynamic query construction with string concatenation or f-strings in cursor.execute() can lead to SQL injection attacks.
-    severity: ERROR
-    languages:
-      - python
-    pattern: cursor.execute($QUERY)
-    where:
-      - metavariable-regex:
-          metavariable: $QUERY
-          regex: '(\+|f"|f''|%|format\()'
-
-  - id: command-injection
-    message: Command injection vulnerability detected. Use of shell=True with dynamic input or os.system() with user-controlled data can lead to command injection attacks.
-    severity: ERROR
-    languages:
-      - python
-    patterns:
-      - pattern-either:
-          - pattern: subprocess.call($CMD, shell=True)
-          - pattern: subprocess.run($CMD, shell=True)
-          - pattern: os.system($CMD)
-    where:
-      - metavariable-regex:
-          metavariable: $CMD
-          regex: '(\+|f"|f''|%|format\(|input\(|sys\.argv)'
+  # Fallback rules only (used when Semgrep Registry packs do not cover
+  # a category). Messages are intentionally short and technical.
 
   - id: hardcoded-secrets
-    message: Hardcoded secret detected. Storing passwords, API keys, or secrets as string literals in code is a security risk. Use environment variables or secure secret management.
-    severity: WARNING
-    languages:
-      - python
-    pattern: |
-      $VAR = $VALUE
-    where:
-      - metavariable-regex:
-          metavariable: $VAR
-          regex: '(?i)(PASSWORD|API_KEY|SECRET|TOKEN|CREDENTIAL)'
-      - metavariable-regex:
-          metavariable: $VALUE
-          regex: "^[\"'].+[\"']$"
-
-  - id: path-traversal
-    message: Path traversal vulnerability detected. File operations with concatenated or user-controlled paths can lead to directory traversal attacks.
+    message: Hardcoded secret detected.
     severity: ERROR
     languages:
       - python
+    metadata:
+      vulnerability_class:
+        - Hardcoded secrets
+    patterns:
+      - pattern-either:
+          - pattern: API_KEY = $VALUE
+          - pattern: PASSWORD = $VALUE
+          - pattern: SECRET_TOKEN = $VALUE
+          - pattern: CREDENTIAL = $VALUE
+
+  - id: path-traversal
+    message: File operation with user-controlled path detected.
+    severity: ERROR
+    languages:
+      - python
+    metadata:
+      vulnerability_class:
+        - Path traversal
     pattern: open($PATH, ...)
     where:
       - metavariable-regex:
@@ -52,15 +32,21 @@ rules:
           regex: '(\+|f"|f''|%|format\(|input\(|sys\.argv)'
 
   - id: insecure-deserialization
-    message: Insecure deserialization detected. pickle.loads() can execute arbitrary code during deserialization. Use safer serialization formats like JSON or implement proper validation.
+    message: pickle.loads() call detected.
     severity: ERROR
     languages:
       - python
+    metadata:
+      vulnerability_class:
+        - Insecure deserialization
     pattern: pickle.loads($DATA)
 
   - id: insecure-ssl-verification
-    message: Insecure SSL verification detected. requests.get(..., verify=False) disables certificate verification and enables MITM attacks.
+    message: requests.get(..., verify=False) detected.
     severity: ERROR
     languages:
       - python
+    metadata:
+      vulnerability_class:
+        - Insecure SSL verification
     pattern: requests.get($URL, verify=False)
