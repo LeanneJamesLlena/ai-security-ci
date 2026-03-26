@@ -1,6 +1,6 @@
 rules:
   # Fallback rules only (used when Semgrep Registry packs do not cover
-  # a category). Messages are intentionally short and technical.
+  # a category). Messages are intentionally short and technical..
 
   - id: hardcoded-secrets
     message: Hardcoded secret detected.
