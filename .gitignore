@@ -10,6 +10,12 @@ env/
 
 # Semgrep
 semgrep-results.json
+semgrep-results-raw.json
+semgrep-results-all.json
+semgrep-official-only.json
+custom-rules-only.json
+findings_list.txt
+comment.md
 
 # IDEs
 .vscode/
