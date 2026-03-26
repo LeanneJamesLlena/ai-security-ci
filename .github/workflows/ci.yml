@@ -41,7 +41,14 @@ jobs:
         run: |
           echo "Running Semgrep scan on src/vulnerable_tasks/"
           ls -la src/vulnerable_tasks/ || echo "Directory listing failed"
-          semgrep scan --config .semgrep/rules.yml --json --output semgrep-results.json src/vulnerable_tasks/
+          # Use Semgrep Registry rules so findings use Semgrep-authored, technical messages
+          # (baseline for actionability/comprehensibility research).
+          semgrep scan \
+            --config p/python \
+            --config p/secrets \
+            --config p/owasp-top-ten \
+            --json --output semgrep-results.json \
+            src/vulnerable_tasks/
         continue-on-error: true
       
       - name: Check scan output
@@ -66,10 +73,9 @@ jobs:
           
           if [ "$FINDINGS" -eq 0 ]; then
             echo "⚠️ Warning: No findings detected. Rules may be misconfigured."
-          elif [ "$FINDINGS" -gt 15 ]; then
-            echo "⚠️ Warning: $FINDINGS findings detected. Rules may be too noisy."
           else
-            echo "✓ Validation passed: $FINDINGS findings detected (expected 5-8)."
+            # Registry packs can legitimately produce more findings than the prototype rules.
+            echo "✓ Validation passed: $FINDINGS findings detected."
           fi
       
       - name: Display results summary
